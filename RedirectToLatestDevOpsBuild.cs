@@ -18,7 +18,7 @@ namespace DevOpsTools
         
         [FunctionName("RedirectToLatestDevOpsBuild")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "v1/{company}/{projectName}/{definitionId}/{artifactName}")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "v1/devops/{company}/{projectName}/{definitionId}/{artifactName}")] HttpRequest req,
             string company,
             string projectName,
             string definitionId,
@@ -35,13 +35,50 @@ namespace DevOpsTools
 
             var getLatestBuildsUrl = $"https://dev.azure.com/{company}/{projectName}/_apis/build/builds?properties=id&$top=3&definitions={definitionId}&queryOrder=finishTimeDescending&api-version=4.1";
             var latestBuildResponse = await _httpClient.GetAsync(getLatestBuildsUrl);
+            if (latestBuildResponse.IsSuccessStatusCode == false) 
+            {
+                return GetError($"Getting the builds failed with response: {latestBuildResponse.StatusCode}", log);
+            }
+
             var builds = await latestBuildResponse.Content.ReadAsAsync<BuildResult>();
+
+            if (builds.Value.Count == 0) 
+            {
+                return GetError("There is no build for this build definition yet.", log);
+            }
+
             var buildId = builds.Value[0].Id;
             var getArtifactUrl = $"https://dev.azure.com/{company}/{projectName}/_apis/build/builds/{buildId}/artifacts?artifactName={artifactName}&api-version=4.1";            
             var artifcatsResponse = await _httpClient.GetAsync(getArtifactUrl);
+
+            if (artifcatsResponse.IsSuccessStatusCode == false) 
+            {
+                return GetError($"Getting build artifacts fails with response: {artifcatsResponse.StatusCode}", log);
+            }
+
             var artifacts = await artifcatsResponse.Content.ReadAsAsync<ArtifactResult>();
             
+            if (string.IsNullOrWhiteSpace(artifacts?.Resource?.DownloadUrl))
+            {
+                return GetError("The artifact download link not found", log);
+            }
+
             return new RedirectResult(artifacts.Resource.DownloadUrl);
+        }
+    
+
+        private static IActionResult GetError(string error, ILogger log) 
+        {
+            log.LogError(error);
+            var result = new 
+            { 
+                isOk = false, 
+                error = error
+            };
+            return new JsonResult(result) 
+            {
+                StatusCode = StatusCodes.Status412PreconditionFailed 
+            };
         }
     }
 }
