@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using System.Net.Http;
 using System.Net;
+using System.Linq;
 
 namespace DevOpsTools
 {
@@ -31,7 +32,6 @@ namespace DevOpsTools
             company = WebUtility.UrlEncode(company);
             projectName = WebUtility.UrlEncode(projectName);
             definitionId = WebUtility.UrlEncode(definitionId);
-            artifactName = WebUtility.UrlEncode(artifactName);
 
             var getLatestBuildsUrl = $"https://dev.azure.com/{company}/{projectName}/_apis/build/builds?properties=id&$top=3&definitions={definitionId}&queryOrder=finishTimeDescending&api-version=4.1";
             var latestBuildResponse = await _httpClient.GetAsync(getLatestBuildsUrl);
@@ -48,7 +48,7 @@ namespace DevOpsTools
             }
 
             var buildId = builds.Value[0].Id;
-            var getArtifactUrl = $"https://dev.azure.com/{company}/{projectName}/_apis/build/builds/{buildId}/artifacts?artifactName={artifactName}&api-version=4.1";            
+            var getArtifactUrl = $"https://dev.azure.com/{company}/{projectName}/_apis/build/builds/{buildId}/artifacts?api-version=4.1";            
             var artifcatsResponse = await _httpClient.GetAsync(getArtifactUrl);
 
             if (artifcatsResponse.IsSuccessStatusCode == false) 
@@ -56,14 +56,29 @@ namespace DevOpsTools
                 return GetError($"Getting build artifacts fails with response: {artifcatsResponse.StatusCode}", log);
             }
 
-            var artifacts = await artifcatsResponse.Content.ReadAsAsync<ArtifactResult>();
+            var artifacts = await artifcatsResponse.Content.ReadAsAsync<ArtifactResourceList>();
             
-            if (string.IsNullOrWhiteSpace(artifacts?.Resource?.DownloadUrl))
+            if (artifacts.Value.Count == 0) 
+            {
+                return GetError("There are no artifact for this build", log);
+            }
+
+            var partialMatch = artifactName.EndsWith("*");
+            
+            artifactName = partialMatch 
+                ? artifactName.Substring(0, artifactName.Length - 1) 
+                : artifactName;
+
+            var res = partialMatch
+                ? artifacts.Value.FirstOrDefault(i => i.Name.StartsWith(artifactName))
+                : artifacts.Value.FirstOrDefault(i => i.Name == artifactName);
+
+            if (string.IsNullOrWhiteSpace(res.Resource?.DownloadUrl))
             {
                 return GetError("The artifact download link not found", log);
             }
 
-            return new RedirectResult(artifacts.Resource.DownloadUrl);
+            return new RedirectResult(res.Resource?.DownloadUrl);
         }
     
 

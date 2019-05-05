@@ -6,6 +6,13 @@ It does two API calls. The first to get list of latest builds and the second to 
 
 The build needs to be a publicly available.
 
+The `artifactName` can be either full or partial ending with `*`. In that case, only the beginning of the name has to match.
+
+Examples:
+
+- full: `sourcekit-lsp-vscode-dev.vsix`
+- partial: `sourcekit-lsp-vscode-*`
+
 In case it fails because of wrong request (wrong company/project/build definition/artifact name) it returns 412 together with json response:
 
 ```json
