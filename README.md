@@ -2,9 +2,15 @@
 
 This is a simple app (Azure function app) that make a request to the https://devops.azure.com to get the latest build for the given project, build definition and artifact name.
 
-It does two API calls. The first to get list of latest builds and the second to get the artifact for the latest build. Finally it redirects you to that build.
+It does two API calls. The first to get list of latest builds and the second to get the artifact download url for the latest build. Finally, it redirects you to the download url of the given artifact.
 
-The build needs to be publicly available.
+The build needs to be a publicly available.
+
+In case it fails because of wrong request (wrong company/project/build definition/artifact name) it returns 412 together with json response:
+
+```json
+{ "isOk": false, "error": "<error description>" }
+```
 
 You can use it in the following fashion:
 ```
